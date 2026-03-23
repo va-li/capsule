@@ -38,7 +38,7 @@ Primarily with Linux system containers (LXC)
 
 First, prepare the host machine. This will install Incus and configure user ID mapping so the container can natively share files with the host without breaking permissions.
 
-**Step 1: Install Incus**
+#### Step 1: Install Incus
 
 Install Incus (see [official documentation](https://linuxcontainers.org/incus/docs/main/tutorial/first_steps/#install-and-initialize-incus)):
 
@@ -53,13 +53,15 @@ sudo usermod -aG incus-admin $USER
 newgrp incus-admin
 ```
 
-Initialize Incus (can now be run without sudo)
+Initialize Incus (can now be run without sudo) with default settings and non-interactive (`--auto`). You can do the initialization interactively also, just remove the `--auto` flag.
 
-```
+```bash
 incus admin init --auto
 ```
 
-**Step 3: Configure ID mapping**
+> Incus configuration guide: https://linuxcontainers.org/incus/docs/main/howto/initialize/#initialize
+
+#### Step 3: Configure ID mapping
 
 An unprivileged container requires a base map of at least 65,536 IDs for the system's background users (e.g., `nobody`, `daemon`, etc.), *plus* our specific mapping so root can map the host's UID/GID directly into the container namespace (allowing file sharing without permissions issues).
 
@@ -94,11 +96,11 @@ sudo systemctl restart incus
 
 ### 2. Sandbox Environment Definition
 
-The `capsule-profile.yaml` defines the environment configuration for the sandbox container, including network options, identity mappings, and `cloud-init` instructions for installing our python tooling.
+The `capsule-profile.yaml` defines the environment configuration for the sandbox container, including network options, identity mappings, device mappings, and `cloud-init` instructions for installing our python tooling.
 
-**Step 1: Customize the container profile definition**
+#### Step 1: Customize the container profile definition
 
-Open `capsule-profile.yaml` and verify the `uid` / `gid` logic. Find the following section:
+Open `capsule-profile.yaml` and make sure your correct `uid` / `gid` are set. Find the following section:
 
 ```yaml
 config:
@@ -131,44 +133,48 @@ config:
       - |
         export PYTHON_VERSION="3.13"
         
-        # Step A: Install 'uv' (fast python package installer/manager) system-wide
+        # Install 'uv' (fast python package installer/manager) system-wide
         curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --to /usr/local/bin
 
         # Set globally so uv defaults to the newly created standard system-level virtual environment
         echo 'export UV_PROJECT_ENVIRONMENT="/root/.venv"' >> /root/.bashrc
         echo "export UV_PYTHON=\"$PYTHON_VERSION\"" >> /root/.bashrc
+
+        # Install node-based coding agent globally
+        npm cache clean -f
+        npm install -g @mariozechner/pi-coding-agent
 ```
 
-**Step 2: Load the profile into Incus**
+#### Step 2: Load the profile into Incus
 
 Create a new Incus profile named `capsule` and load the configuration from `capsule-profile.yaml`:
 
 ```bash
-sudo incus profile create capsule
-cat capsule-profile.yaml | sudo incus profile edit capsule
+incus profile create capsule
+cat capsule-profile.yaml | incus profile edit capsule
 ```
 
 You can verify the profile was applied correctly by viewing it:
 
 ```bash
-sudo incus profile show capsule
+incus profile show capsule
 ```
 
 ### 3. Runtime Execution
 
 Launch a container with our profile and attach the required resources (directories, ports, GPU) while it's running.
 
-**Launching the container**
+#### Launching the container
 
 Create and start the container instances (we'll name it `capsule-inst`) using the Debian 13 (Trixie) image and your custom profile.
 
 Note the image name has a `/cloud` suffix. This is a special variant of the Debian image that includes `cloud-init`, which uses the configuration we defined in the profile to set up the environment on first boot.
 
 ```bash
-sudo incus launch images:debian/13/cloud capsule-inst --profile default --profile capsule
+incus launch images:debian/13/cloud capsule-inst --profile default --profile capsule
 ```
 
-**Accessing the Container**
+#### Accessing the Container
 
 Drop into the container to verify it's working. (You will enter as `root`, which is directly mapped to the host user `dave`):
 ```bash
@@ -178,10 +184,10 @@ incus exec capsule-inst -- bash
 Or for the coding agent
 
 ```bash
-sudo incus exec capsule-inst -- pi
+incus exec capsule-inst -- pi
 ```
 
-**Allowing Internet Access**
+#### Allowing Internet Access
 
 Allow connections to/from the container and to the outside world by adding iptables rules on the host to accept forwarded traffic from the container's network bridge (`incusbr0`, see `capsule-profile.yaml`):
 
@@ -192,7 +198,7 @@ sudo iptables -I FORWARD -o incusbr0 -j ACCEPT
 
 This should probably be made more restrictive. Currently, I'm not sure how.
 
-**Attach Directories (hot-pluggable)**
+#### Attach Directories (hot-pluggable)
 
 Create your local host directory and read-only data directory, then attach them to the running container securely. Note that Incus requires absolute paths, so we use `$(pwd)` for the local repository folder:
 
@@ -206,11 +212,14 @@ incus config device add capsule-inst host_rw disk source=$(pwd)/capsule-output p
 
 # Attach read-only data directory
 # readonly=true ensures the container cannot modify the host data
-mkdir -p ~/capsule-data
+mkdir -p ./capsule-data
+echo -e "1,2,3\n" > ./capsule-data/dataset.csv # example data file, the container will be able to read this but not modify it
 incus config device add capsule-inst host_ro disk source=$(pwd)/capsule-data path=/root/capsule-data readonly=true
 ```
 
-**Making ports inside the container available outside (hot-pluggable)**
+Now inside the container, you can access the shared directories at `/root/capsule-output` (read/write) and `/root/capsule-data` (read-only). Any files the agent creates or modifies in `/root/capsule-output` will appear in your host's `./capsule-output` folder, and any files you place in `./capsule-data` on the host will be accessible to the agent at `/root/capsule-data`.
+
+#### Making ports inside the container available outside (hot-pluggable)
 
 To expose a web server running on port 8080 inside the container to the host:
   
