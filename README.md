@@ -2,7 +2,7 @@
 
 ... is my shot at putting boundaries around a coding agent so that I can run it in full YOLO mode.
 
-## Why?
+## Why? (or just jump to [setup instructions](#setup-instructions))
 
 I want to use a coding agent on my local machine, but don't trust it to not do something stupid.
 
@@ -26,13 +26,11 @@ Primarily with Linux system containers (LXC)
 - **Mapping the container's root user to a non-root host user** (e.g. `dave`) to allow seamless file sharing without permission issues (docker writes to host volumes as root per default, which is annoying).
 - **Installing the coding agent and tools with Incus when starting the container** (using `cloud-init`), so the environment is defined as code and can be easily reproduced or modified.
 
-## Installation
+## Setup Instructions
 
 ### Requirements
 
 - A host machine running Linux (I used Debian 13) with root access to install packages and configure user namespaces.
-
-## Setup Instructions
 
 ### 1. Host Preparation
 
