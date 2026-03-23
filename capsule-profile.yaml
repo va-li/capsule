@@ -1,0 +1,65 @@
+name: capsule
+description: Capsule sandbox Environment Definition
+config:
+  # --------------------------------------------------------------------------
+  # 1. User/ID Mapping (Raw ID Map)
+  # --------------------------------------------------------------------------
+  # Map host user UID and GID (e.g., 1000) directly to container root (UID/GID 0).
+  # All other container UIDs remain unmapped and restricted.
+  # IMPORTANT: Change 1000 to match the host UID/GID for your user (e.g., dave)!
+  raw.idmap: |
+    both 1000 0
+
+  # --------------------------------------------------------------------------
+  # 2. Cloud-Init Initialization
+  # --------------------------------------------------------------------------
+  # Cloud-init runs on the very first boot of the container to provision it.
+  user.user-data: |
+    #cloud-config
+
+    # Update repositories and install necessary base packages required for our Python setup
+    package_update: true
+    packages:
+      - curl
+      - git
+      - python3
+      - python3-venv
+      - nodejs
+      - npm
+
+    # Run custom provisioning scripts 
+    runcmd:
+      - |
+        export PYTHON_VERSION="3.13"
+        
+        # Step A: Install 'uv' (fast python package installer/manager) system-wide
+        curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --to /usr/local/bin
+
+        # Set globally so uv defaults to the newly created standard system-level virtual environment
+        echo 'export UV_PROJECT_ENVIRONMENT="/root/.venv"' >> /root/.bashrc
+        echo "export UV_PYTHON=\"$PYTHON_VERSION\"" >> /root/.bashrc
+
+        # Step B: Set up local python environment and install the required data/web scraping stack
+        # 'uv init --bare' creates just a pyproject.toml, and 'uv add' will fetch the target Python version and create the .venv
+        cd /root
+        /usr/local/bin/uv init --bare --python "$PYTHON_VERSION"
+        /usr/local/bin/uv add ipython playwright numpy pandas matplotlib
+
+        # Step C: Install Playwright system dependencies (chromium and firefox)
+        /root/.venv/bin/playwright install --with-deps chromium firefox
+
+        # Step D: Install node-based coding agent globally
+        npm cache clean -f
+        npm install -g @mariozechner/pi-coding-agent
+
+devices:
+  # Attach root filesystem from the default storage pool
+  root:
+    path: /
+    pool: default
+    type: disk
+  # Attach a simple network bridge device for Internet access
+  eth0:
+    name: eth0
+    network: incusbr0
+    type: nic
