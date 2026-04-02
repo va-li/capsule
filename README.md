@@ -254,6 +254,17 @@ Pi supports any LLM that is compatible with the OpenAI API specification. To int
       "authHeader": true,
       "models": [
         {
+          "id": "qwen-3.5-397b",
+          "name": "Aqueduct Qwen-3.5 397B (Vision)",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 200000,
+          "compat": {
+                "thinkingFormat": "qwen-chat-template",
+                "supportsReasoningEffort": false
+          },
+        },
+        {
           "id": "glm-4.7-355b", // here we use GLM-4.7-355B, but it could be any other model available from aqueduct
           "name": "Aqueduct GLM-4.7 355B",
           "reasoning": true,
